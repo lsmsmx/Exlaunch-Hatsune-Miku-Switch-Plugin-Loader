@@ -34,6 +34,13 @@ I plan to port most cool hook based pacthes made for Project Diva Megamix+ for P
 - Proper pv_parser to not make game iterate every possible pv_id (i keep failing to make it not crash the game)
 - Fixing issue where pv_db info about singers doesn't apply and it always sets to default miku (prob have to rewrite saving logic, but the issue itself isn't that big of a deal, so not going to fix soon)
 
+# TitleID to be used
+const char *possible_tids[] = {
+        "0100F3100DA46000", // JP (Mega39s)
+        "01001CC00FA1A000", // EN (MegaMix)
+        "0100BE300FF62000"  // KR (Mega39s)
+};    
+
 # Credit
 - Atmosphère: A great reference and guide.
 - oss-rtld: Included for (pending) interop with rtld in applications (License [here](https://github.com/shadowninja108/exlaunch/blob/main/source/lib/reloc/rtld/LICENSE.txt)).
