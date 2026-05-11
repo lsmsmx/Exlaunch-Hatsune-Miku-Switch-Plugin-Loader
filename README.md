@@ -145,3 +145,30 @@ const char *possible_tids[] = {
 - Atmosphère: A great reference and guide.
 - oss-rtld: Included for (pending) interop with rtld in applications (License [here](https://github.com/shadowninja108/exlaunch/blob/main/source/lib/reloc/rtld/LICENSE.txt)).
 - DML https://github.com/blueskythlikesclouds/DivaModLoader/tree/master/Source/DivaModLoader
+
+# Motion ImGUI bones info
+ 0-3 looks like rotation of body slightly and mostly pelvis,  moving forward and backward 
+3-6 neck and head rotation (4th best)
+6-91 a lot of face stuff, don't recommend touching any of it, just use facemot
+92-97 left shoulder 
+96-98 left wrist
+98-101 left hand index finger
+102-105 left hand smallest finger 
+105-109 left hand 4th finter
+109-113 left hand middle finger 
+113-117 left hand thumb 
+124-129 right shoulder
+128-130 right wrist
+130-133 right hand index finger 
+134-137 right hand smallest finger
+137-140 right hand 4th finger
+141-145 right hand middle finger
+144-148 right hand thumb 
+155-157 left arm 
+157-159 right arm 
+160-162 waist rotation
+162-164 left leg 
+164-166 left foot
+166-168 right leg
+168-170 right foot
+178-181 xyz dimensions 
