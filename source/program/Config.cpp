@@ -1,4 +1,5 @@
 #include "Config.hpp"
+#include "FileLogger.hpp"
 #include "toml.hpp"
 #include "lib.hpp"
 #include "fs.hpp"
@@ -7,13 +8,15 @@
 #include <set>
 
 bool Config::enableDebug = false;
+bool Config::enableLog = false;
 std::string Config::modsDirectoryPath = "";
 std::vector<std::string> Config::priorityPaths;
 
 static void SaveConfig(const std::string& path) {
     std::string tomlContent = "# DML Switch Port - Global Configuration\n";
     tomlContent += "enabled = true\n";
-    tomlContent += "debug = " + std::string(Config::enableDebug ? "true" : "false") + "\n\n";
+    tomlContent += "debug = " + std::string(Config::enableDebug ? "true" : "false") + "\n";
+    tomlContent += "log = " + std::string(Config::enableLog ? "true" : "false") + "\n\n";
     tomlContent += "# Priority list (Top is highest priority).\n";
     tomlContent += "# New mods found on SD are automatically appended here.\n";
     tomlContent += "priority =[\n";
@@ -34,20 +37,22 @@ static void SaveConfig(const std::string& path) {
 }
 
 bool Config::init() {
-    const char* possible_tids[] = { 
+    const char* possible_tids[] = {
         "0100F3100DA46000", // JP
         "01001CC00FA1A000", // EN
         "0100BE300FF62000"  // KR
     };
-    
+
     std::string atmoPath = "";
+    const char* foundTid = nullptr;
     nn::fs::DirectoryHandle dh;
     for (const char* tid : possible_tids) {
         std::string testPath = "ExlSD:/atmosphere/contents/" + std::string(tid);
         if (R_SUCCEEDED(nn::fs::OpenDirectory(&dh, testPath.c_str(), nn::fs::OpenDirectoryMode_Directory))) {
             nn::fs::CloseDirectory(dh);
             atmoPath = testPath;
-            break; 
+            foundTid = tid;
+            break;
         }
     }
 
@@ -72,6 +77,7 @@ bool Config::init() {
         if (result) {
             auto config = std::move(result).table();
             enableDebug = config["debug"].value_or(false);
+            enableLog   = config["log"].value_or(false);
             if (auto pArr = config["priority"].as_array()) {
                 for (auto& el : *pArr) {
                     std::string val = el.value_or("");
@@ -82,18 +88,45 @@ bool Config::init() {
         }
     }
 
+    FileLogger::enabled = enableLog;
+    FileLogger::init();
+
+    FileLogger::log("=== DML Switch Port ===");
+    FileLogger::log("TID: %s", foundTid ? foundTid : "unknown");
+    FileLogger::log("atmoPath: %s", atmoPath.c_str());
+    FileLogger::log("modsDirectoryPath: %s", modsDirectoryPath.c_str());
+    FileLogger::log("config.toml: %s", configExists ? "found" : "not found");
+    FileLogger::log("debug=%s log=%s", enableDebug ? "true" : "false", enableLog ? "true" : "false");
+    FileLogger::log("priority from config: %zu entries", priorityPaths.size());
+    for (const auto& p : priorityPaths)
+        FileLogger::log("  priority: %s", p.c_str());
+
     std::vector<std::string> modsOnDisk;
+    if (R_SUCCEEDED(nn::fs::OpenDirectory(&dh, modsDirectoryPath.c_str(), nn::fs::OpenDirectoryMode_All))) {
+        int64_t totalCount = 0;
+        nn::fs::GetDirectoryEntryCount(&totalCount, dh);
+        FileLogger::log("mods dir total entry count (all types): %lld", (long long)totalCount);
+        nn::fs::CloseDirectory(dh);
+    }
     if (R_SUCCEEDED(nn::fs::OpenDirectory(&dh, modsDirectoryPath.c_str(), nn::fs::OpenDirectoryMode_Directory))) {
         int64_t count = 0;
         nn::fs::DirectoryEntry entry;
         while (R_SUCCEEDED(nn::fs::ReadDirectory(&count, &entry, dh, 1)) && count > 0) {
-            if ((int)entry.m_Type == (int)nn::fs::DirectoryEntryType_Directory) {
+            // field_304 low byte is the actual type (m_Type is at wrong offset 0x301 vs real 0x304)
+            int actualType = (int)(entry.field_304 & 0xFF);
+            if (actualType == (int)nn::fs::DirectoryEntryType_Directory) {
                 modsOnDisk.push_back(entry.m_Name);
             }
         }
         nn::fs::CloseDirectory(dh);
+        FileLogger::log("mods dir opened OK, found %zu dir entries", modsOnDisk.size());
+    } else {
+        FileLogger::log("ERROR: failed to open modsDirectoryPath");
     }
     std::sort(modsOnDisk.begin(), modsOnDisk.end());
+
+    for (const auto& m : modsOnDisk)
+        FileLogger::log("  on disk: %s", m.c_str());
 
     bool configChanged = !configExists;
 
@@ -102,6 +135,7 @@ bool Config::init() {
     auto it = priorityPaths.begin();
     while (it != priorityPaths.end()) {
         if (currentDiskSet.find(*it) == currentDiskSet.end()) {
+            FileLogger::log("  removed from priority (not on disk): %s", it->c_str());
             it = priorityPaths.erase(it);
             configChanged = true;
         } else {
@@ -113,12 +147,20 @@ bool Config::init() {
     std::set<std::string> currentPrioritySet(priorityPaths.begin(), priorityPaths.end());
     for (const auto& modName : modsOnDisk) {
         if (currentPrioritySet.find(modName) == currentPrioritySet.end()) {
+            FileLogger::log("  added to priority (new): %s", modName.c_str());
             priorityPaths.push_back(modName);
             configChanged = true;
         }
     }
 
-    if (configChanged) SaveConfig(configPath);
+    FileLogger::log("final priority list: %zu entries", priorityPaths.size());
+    for (const auto& p : priorityPaths)
+        FileLogger::log("  final: %s", p.c_str());
+
+    if (configChanged) {
+        FileLogger::log("config changed, saving");
+        SaveConfig(configPath);
+    }
 
     return true;
 }

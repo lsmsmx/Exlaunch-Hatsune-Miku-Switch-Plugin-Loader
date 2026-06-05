@@ -113,7 +113,9 @@ Set 'Trigger' to 1 and save to jump. Once you save you will be redirected to the
   `Change 0 to 1 to enable, 1 to 0 to disable."
   ImGUI_Debug_Window = 0
   InputOverlay = 0`
-- Bone Control is a part of DivaImGUI
+- All that debug stuff is inspired by original deck window from MM+ Debug mod by `nastys`
+- Big thanks to https://github.com/Retinalogic/imgui-nvn [subsdk8 by him]
+- Bone Control is a part of DivaImGUI by lybxlpsv https://github.com/lybxlpsv/divaimgui that i ported thx to him<3
 - You can totally disable debug and freecam by having `debug = false` in global config file. This way, none of hotkeys and state selectors can be used.
 - Debug may crash randomly when you select something. From my experience, the same random crashes happen in MM+
 - Aet_DT is known to crash, even tho it works fine in MM+. It seems to fail at `strlen and cmp` or something. No solution was found, even after disabling half of plugin features and all mods even LayerFS ones.
@@ -143,13 +145,6 @@ const char *possible_tids[] = {
 - Atmosphère: A great reference and guide.
 - oss-rtld: Included for (pending) interop with rtld in applications (License [here](https://github.com/shadowninja108/exlaunch/blob/main/source/lib/reloc/rtld/LICENSE.txt)).
 - DML https://github.com/blueskythlikesclouds/DivaModLoader/tree/master/Source/DivaModLoader
-- All that debug stuff is inspired by original deck window from MM+ Debug mod by `nastys`
-- Freecam code by vixen https://github.com/vixen256/camera
-- Challenge Time by vixen https://github.com/vixen256/challenge
-- Render while paused by mokk244
-- Big thanks to https://github.com/Retinalogic/imgui-nvn [subsdk8 by him]
-- Bone Control is a part of DivaImGUI i ported by lybxlpsv https://github.com/lybxlpsv/divaimgui thx to him<3
-- Thanks stewie3.1 with figuring out the id patch
 
 # Motion ImGUI bones info
 - 0-3 looks like rotation of body slightly and mostly pelvis,  moving forward and backward 
