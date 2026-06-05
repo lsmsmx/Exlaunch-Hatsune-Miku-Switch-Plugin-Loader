@@ -1,6 +1,7 @@
 #include "ModLoader.hpp"
 #include "DatabaseLoader.hpp"
 #include "Config.hpp"
+#include "FileLogger.hpp"
 #include "toml.hpp"
 #include "lib.hpp"
 #include "fs.hpp"
@@ -64,13 +65,15 @@ std::vector<std::string> ModLoader::modDirectoryPaths;
 static std::vector<std::string> s_modRomPaths;
 
 void ModLoader::initMod(const std::string& path) {
+    FileLogger::log("[initMod] %s", path.c_str());
     std::string configPath = path + "/config.toml";
     nn::fs::FileHandle h;
-    
+
     // If no mod-specific config exists, treat the mod as enabled by default
     if (R_FAILED(nn::fs::OpenFile(&h, configPath.c_str(), nn::fs::OpenMode_Read))) {
+        FileLogger::log("  no config.toml, enabled by default");
         modDirectoryPaths.push_back(path);
-        return; 
+        return;
     }
 
     int64_t size = 0;
@@ -80,18 +83,24 @@ void ModLoader::initMod(const std::string& path) {
     nn::fs::CloseFile(h);
 
     toml::parse_result result = toml::parse(content);
-    if (!result) return;
-    
+    if (!result) {
+        FileLogger::log("  config.toml parse failed, skipping");
+        return;
+    }
+
     toml::table config = std::move(result).table();
-    if (!config["enabled"].value_or(true)) return;
+    bool isEnabled = config["enabled"].value_or(true);
+    FileLogger::log("  config.toml found, enabled=%s", isEnabled ? "true" : "false");
+    if (!isEnabled) return;
 
     // Handle "include" array if present
     if (auto includeArr = config["include"].as_array()) {
         for (auto& elem : *includeArr) {
             std::string sub = elem.value_or("");
             if (!sub.empty()) {
-                if (sub == ".") modDirectoryPaths.push_back(path);
-                else modDirectoryPaths.push_back(path + "/" + sub);
+                std::string resolved = (sub == ".") ? path : path + "/" + sub;
+                FileLogger::log("  include: %s", resolved.c_str());
+                modDirectoryPaths.push_back(resolved);
             }
         }
     } else {
@@ -116,7 +125,14 @@ HOOK_DEFINE_TRAMPOLINE(InitRomDirectoryPathsHook) {
 };
 
 void ModLoader::init() {
-    if (Config::modsDirectoryPath.empty()) return;
+    FileLogger::log("=== ModLoader::init ===");
+
+    if (Config::modsDirectoryPath.empty()) {
+        FileLogger::log("modsDirectoryPath is empty, aborting");
+        return;
+    }
+
+    FileLogger::log("processing %zu priority entries", Config::priorityPaths.size());
 
     // 1. Process mods based on the synchronized priority list
     for (const auto& modName : Config::priorityPaths) {
@@ -125,17 +141,21 @@ void ModLoader::init() {
         if (R_SUCCEEDED(nn::fs::OpenDirectory(&dh, modDirectory.c_str(), nn::fs::OpenDirectoryMode_Directory))) {
             nn::fs::CloseDirectory(dh);
             initMod(modDirectory);
+        } else {
+            FileLogger::log("  [skip] dir not found: %s", modDirectory.c_str());
         }
     }
+
+    FileLogger::log("modDirectoryPaths: %zu entries", modDirectoryPaths.size());
 
     // 2. Convert physical SD paths to virtual RomFS paths for optimized loading
     for (auto& modDir : modDirectoryPaths) {
         std::string checkPath = modDir + "/rom";
-        
+
         nn::fs::DirectoryHandle dh;
         if (R_SUCCEEDED(nn::fs::OpenDirectory(&dh, checkPath.c_str(), nn::fs::OpenDirectoryMode_Directory))) {
             nn::fs::CloseDirectory(dh);
-            
+
             // Convert "ExlSD:/atmosphere/.../romfs/mods/ModName" to "rom:/mods/ModName"
             // This triggers Atmosphere's LayeredFS RAM caching for maximum speed.
             std::string virtualPath = modDir;
@@ -143,13 +163,23 @@ void ModLoader::init() {
             if (romfsPos != std::string::npos) {
                 virtualPath = "rom:/" + virtualPath.substr(romfsPos + 7);
             }
+            FileLogger::log("  romPath: %s -> %s", modDir.c_str(), virtualPath.c_str());
             s_modRomPaths.push_back(virtualPath);
+        } else {
+            FileLogger::log("  [no /rom dir] %s", modDir.c_str());
         }
     }
 
+    FileLogger::log("s_modRomPaths: %zu entries", s_modRomPaths.size());
+
     // Initialize mod prefixes for the Database (MdataMgr)
     if (!s_modRomPaths.empty()) {
+        FileLogger::log("calling DatabaseLoader::initMdataMgr");
         DatabaseLoader::initMdataMgr(s_modRomPaths);
         InitRomDirectoryPathsHook::InstallAtOffset(ADDR_INIT_ROM_DIR);
+    } else {
+        FileLogger::log("no rom paths, hooks NOT installed");
     }
+
+    FileLogger::log("=== ModLoader::init done ===");
 }
